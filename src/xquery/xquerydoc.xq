@@ -14,7 +14,7 @@ xquery version "1.0" encoding "UTF-8";
  : limitations under the License.
  :)
 
-(:~ 
+(:~
  :  This library module controls the parsing of XQuery xqdoc comments
  :  using the xquerydoc xquery library
  :
@@ -25,14 +25,14 @@ xquery version "1.0" encoding "UTF-8";
  :
  :  import module namespace xqdoc="http://github.com/xquery/xquerydoc" at "/xquery/xquerydoc.xq";
  :
- :  xqp:parse-XQuery(fn:collection('/some/xquery/?select=file.xqy;unparsed=yes')) 
+ :  xqp:parse-XQuery(fn:collection('/some/xquery/?select=file.xqy;unparsed=yes'))
  :
  :  you would then transform the resultant xqdoc xml with one of the supplied stylesheets in src/lib
  :  directory
  :
  :  @author Jim Fuller, John Snelson
  :  @since Sept 18, 2011
- :  @version 0.1
+ :  @version 0.2
  :)
 
 module namespace xqd="http://github.com/xquery/xquerydoc";
