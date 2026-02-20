@@ -48,3 +48,48 @@ run_calabash -isource="$TMPCONFIG" -oresult=result/Saxon/xquery31.xml saxon-test
 run_calabash -isource="$TMPCONFIG" -oresult=result/saxon-report.html report.xpl processor=Saxon
 
 rm -f "$TMPCONFIG"
+
+# Print a pass/fail summary by comparing <expected> vs <actual> in each result file.
+python3 - "${XQUERYDOC_DIR}/src/tests/result/Saxon" <<'PYEOF'
+import sys, os, io
+import xml.etree.ElementTree as ET
+
+result_dir = sys.argv[1]
+tests = [
+    ("default",  "default.xml"),
+    ("get-code",  "get-code.xml"),
+    ("sample",    "sample.xml"),
+    ("xquery31",  "xquery31.xml"),
+]
+
+def canon(el):
+    out = io.StringIO()
+    ET.canonicalize(ET.tostring(el), out=out, strip_text=True)
+    return out.getvalue()
+
+failures = 0
+print()
+print("Saxon test results:")
+for name, fname in tests:
+    path = os.path.join(result_dir, fname)
+    try:
+        root = ET.parse(path).getroot()
+        for test in root.findall("test"):
+            exp = list(test.find("expected"))
+            act = list(test.find("actual"))
+            if exp and act and canon(exp[0]) == canon(act[0]):
+                print(f"  PASS  {name}")
+            else:
+                print(f"  FAIL  {name}")
+                failures += 1
+    except Exception as e:
+        print(f"  ERROR {name}: {e}")
+        failures += 1
+
+print()
+if failures == 0:
+    print("All tests passed.")
+else:
+    print(f"{failures} test(s) FAILED.")
+sys.exit(failures)
+PYEOF

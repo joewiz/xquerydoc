@@ -141,8 +141,17 @@ declare function parse($module as xs:string, $mode as xs:string) as element(doc:
     element doc:module {
       attribute type { if($module/self::MainModule) then "main" else if($module/self::LibraryModule) then "library" else "error" },
       element doc:uri { $module/ModuleDecl/URILiteral/@value/fn:string() },
-      if($module/(ModuleDecl | self::MainModule/Prolog/Import/ModuleImport|self::LibraryModule)) 
-      then _comment($module/(ModuleDecl | self::MainModule/Prolog/Import/ModuleImport|self::LibraryModule)) 
+      let $comment-anchor := (
+        $module/(ModuleDecl | self::LibraryModule),
+        (: For main modules the xqdoc comment may be a text sibling of MainModule (when a
+           VersionDecl is present) or a text sibling of Module itself (when there is no
+           VersionDecl and comments appear at the XQuery element level). :)
+        if ($module/self::MainModule) then
+          ($module, $module/parent::Module)[fn:exists(preceding-sibling::text()[1])][1]
+        else ()
+      )
+      return if (fn:exists($comment-anchor))
+      then _comment($comment-anchor)
       else ()
       (: TBD name and body - jpcs :)
     },
