@@ -18,15 +18,25 @@
 # expected: option contains the path to the expected result for the test
 #
 
-cd src/tests
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+XQUERYDOC_DIR="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/Saxon/default.xml saxon-test.xpl example=/src/tests/examples/?select=default.xqy expected=/src/tests/expected/saxon/default.xml
+# Generate a temporary config with the correct project root path
+TMPCONFIG=$(mktemp /tmp/xquerydoc-config.XXXXXX.xml)
+sed "s|<path>.*</path>|<path>${XQUERYDOC_DIR}</path>|" "${XQUERYDOC_DIR}/src/tests/config.xml" > "$TMPCONFIG"
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/Saxon/get-code.xml saxon-test.xpl example=/src/tests/examples/?select=get-code.xqy expected=/src/tests/expected/saxon/get-code.xml
+cd "${XQUERYDOC_DIR}/src/tests"
+mkdir -p result/Saxon
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/Saxon/sample.xml saxon-test.xpl example=/src/tests/examples/?select=sample.xqy expected=/src/tests/expected/saxon/sample.xml
+/usr/local/bin/calabash -isource="$TMPCONFIG" -oresult=result/Saxon/default.xml saxon-test.xpl example=/src/tests/examples/?select=default.xqy expected=/src/tests/expected/saxon/default.xml
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/Saxon/xquery31.xml saxon-test.xpl example=/src/tests/examples/?select=xquery31.xqy expected=/src/tests/expected/saxon/xquery31.xml
+/usr/local/bin/calabash -isource="$TMPCONFIG" -oresult=result/Saxon/get-code.xml saxon-test.xpl example=/src/tests/examples/?select=get-code.xqy expected=/src/tests/expected/saxon/get-code.xml
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/saxon-report.html report.xpl processor=Saxon
+/usr/local/bin/calabash -isource="$TMPCONFIG" -oresult=result/Saxon/sample.xml saxon-test.xpl example=/src/tests/examples/?select=sample.xqy expected=/src/tests/expected/saxon/sample.xml
 
+/usr/local/bin/calabash -isource="$TMPCONFIG" -oresult=result/Saxon/xquery31.xml saxon-test.xpl example=/src/tests/examples/?select=xquery31.xqy expected=/src/tests/expected/saxon/xquery31.xml
+
+/usr/local/bin/calabash -isource="$TMPCONFIG" -oresult=result/saxon-report.html report.xpl processor=Saxon
+
+rm -f "$TMPCONFIG"
