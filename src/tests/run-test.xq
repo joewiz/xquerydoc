@@ -1,7 +1,7 @@
 xquery version "1.0" encoding "UTF-8";
 
 import module namespace xqdoc="http://github.com/xquery/xquerydoc"
-  at "xquery/xquerydoc.xq";
+  at "../xquery/xquerydoc.xq";
 
 declare variable $distpath as xs:string external;
 declare variable $expected as xs:string external;
