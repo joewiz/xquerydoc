@@ -14,18 +14,18 @@ xquery version "1.0";
  : limitations under the License.
  :)
 
-(:~ 
+(:~
  : <h1>xqueryparser.xq</h1>
- : <p>A parser for XQuery 3.0, XQuery Update, XQuery Full Text, and MarkLogic XQuery extensions.</p>
- : 
+ : <p>A parser for XQuery 3.1, XQuery Update, and XQuery Full Text.</p>
+ :
  :  @author John Snelson
  :  @since Feb 17, 2012
- :  @version 0.2
+ :  @version 0.3
  :)
 module namespace xqp="http://github.com/jpcs/xqueryparser.xq";
 declare default function namespace "http://github.com/jpcs/xqueryparser.xq";
 
-import module namespace p="XQueryML30" at "XQueryML30.xq";
+import module namespace p="XQuery31" at "XQuery31.xq";
 
 (:~ 
  : Parses the XQuery module in the string argument. The module string
@@ -115,6 +115,27 @@ declare (: private :) function _simplify($nodes)
       case element(EQName) return _process_skip($n)
       case element(FunctionName) return _process_skip($n)
 
+      (: XQuery 3.1 map/array constructors :)
+      case element(MapConstructor) return _process_skip($n)
+      case element(MapConstructorEntry) return _process_skip($n)
+      case element(MapKeyExpr) return _process_skip($n)
+      case element(MapValueExpr) return _process_skip($n)
+      case element(SquareArrayConstructor) return _process_skip($n)
+      case element(CurlyArrayConstructor) return _process_skip($n)
+      (: XQuery 3.1 arrow and lookup operators :)
+      case element(ArrowExpr) return _process_skip($n)
+      case element(ArrowFunctionSpecifier) return _process_skip($n)
+      case element(Lookup) return _process_skip($n)
+      case element(UnaryLookup) return _process_skip($n)
+      case element(KeySpecifier) return _process_skip($n)
+      (: XQuery 3.1 string constructors :)
+      case element(StringConstructor) return _process_skip($n)
+      case element(StringConstructorChars) return _process_skip($n)
+      case element(StringConstructorInterpolation) return _process_skip($n)
+      (: XQuery 3.1 type system :)
+      case element(MapTest) return _process_skip($n)
+      case element(ArrayTest) return _process_skip($n)
+
       case element(PredefinedEntityRef) return
         element { fn:node-name($n) } {
           attribute value { _unescape_helper($n,"") },
@@ -192,36 +213,18 @@ declare (: private :) function _combine_group($group)
 (:~ Build the namespace map :)
 declare (: private :) function _build_namespaces($n)
 {
-  let $marklogic := fn:contains($n/Module/VersionDecl/StringLiteral[1],"-ml")
   let $ns := (
     (: Pre-declared bindings :)
     <ns prefix="xml" uri="http://www.w3.org/XML/1998/namespace"/>,
     <ns prefix="xs" uri="http://www.w3.org/2001/XMLSchema"/>,
     <ns prefix="xsi" uri="http://www.w3.org/2001/XMLSchema-instance"/>,
     <ns prefix="fn" uri="http://www.w3.org/2005/xpath-functions"/>,
-    <ns prefix="local" uri="http://www.w3.org/2005/xquery-local-functions"/>,
-    if($marklogic) then (
-      <ns prefix="err" uri="http://www.w3.org/2005/xqt-errors"/>,
-      <ns prefix="xdmp" uri="http://marklogic.com/xdmp"/>,
-      <ns prefix="cts" uri="http://marklogic.com/cts"/>,
-      <ns prefix="sec" uri="http://marklogic.com/xdmp/security"/>,
-      <ns prefix="error" uri="http://marklogic.com/xdmp/error"/>,
-      <ns prefix="dir" uri="http://marklogic.com/xdmp/directory"/>,
-      <ns prefix="dav" uri="DAV:"/>,
-      <ns prefix="lock" uri="http://marklogic.com/xdmp/lock"/>,
-      <ns prefix="prop" uri="http://marklogic.com/xdmp/property"/>,
-      <ns prefix="spell" uri="http://marklogic.com/xdmp/spell"/>,
-      <ns prefix="math" uri="http://marklogic.com/xdmp/math"/>,
-      <ns prefix="dbg" uri="http://marklogic.com/xdmp/debug"/>,
-      <ns prefix="prof" uri="http://marklogic.com/xdmp/profile"/>,
-      <ns prefix="map" uri="http://marklogic.com/xdmp/map"/>
-    ) else ()
+    <ns prefix="local" uri="http://www.w3.org/2005/xquery-local-functions"/>
   )
   let $ns := (
     for $d in $n/Module/LibraryModule/ModuleDecl
-    return (<ns prefix="{ $d/NCName/NCName }"
-                uri="{ $d/URILiteral/@value }"/>,
-            if($marklogic) then <function uri="{ $d/URILiteral/@value }"/> else ()),
+    return <ns prefix="{ $d/NCName/NCName }"
+               uri="{ $d/URILiteral/@value }"/>,
     $ns
   )
   let $ns := (

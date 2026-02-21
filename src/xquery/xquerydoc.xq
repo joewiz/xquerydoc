@@ -14,7 +14,7 @@ xquery version "1.0" encoding "UTF-8";
  : limitations under the License.
  :)
 
-(:~ 
+(:~
  :  This library module controls the parsing of XQuery xqdoc comments
  :  using the xquerydoc xquery library
  :
@@ -25,14 +25,14 @@ xquery version "1.0" encoding "UTF-8";
  :
  :  import module namespace xqdoc="http://github.com/xquery/xquerydoc" at "/xquery/xquerydoc.xq";
  :
- :  xqp:parse-XQuery(fn:collection('/some/xquery/?select=file.xqy;unparsed=yes')) 
+ :  xqp:parse-XQuery(fn:collection('/some/xquery/?select=file.xqy;unparsed=yes'))
  :
  :  you would then transform the resultant xqdoc xml with one of the supplied stylesheets in src/lib
  :  directory
  :
  :  @author Jim Fuller, John Snelson
  :  @since Sept 18, 2011
- :  @version 0.1
+ :  @version 0.2
  :)
 
 module namespace xqd="http://github.com/xquery/xquerydoc";
@@ -141,8 +141,17 @@ declare function parse($module as xs:string, $mode as xs:string) as element(doc:
     element doc:module {
       attribute type { if($module/self::MainModule) then "main" else if($module/self::LibraryModule) then "library" else "error" },
       element doc:uri { $module/ModuleDecl/URILiteral/@value/fn:string() },
-      if($module/(ModuleDecl | self::MainModule/Prolog/Import/ModuleImport|self::LibraryModule)) 
-      then _comment($module/(ModuleDecl | self::MainModule/Prolog/Import/ModuleImport|self::LibraryModule)) 
+      let $comment-anchor := (
+        $module/(ModuleDecl | self::LibraryModule),
+        (: For main modules the xqdoc comment may be a text sibling of MainModule (when a
+           VersionDecl is present) or a text sibling of Module itself (when there is no
+           VersionDecl and comments appear at the XQuery element level). :)
+        if ($module/self::MainModule) then
+          ($module, $module/parent::Module)[fn:exists(preceding-sibling::text()[1])][1]
+        else ()
+      )
+      return if (fn:exists($comment-anchor))
+      then _comment($comment-anchor)
       else ()
       (: TBD name and body - jpcs :)
     },

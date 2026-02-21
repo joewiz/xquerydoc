@@ -1,30 +1,95 @@
 #!/bin/bash
 
-# This script runs the xquerydoc testsuite for the Saxon  processor
-# using an XProc pipeline (src/tests/marklogic-test.xpl), which is a generic
-# testrunner.
+# This script runs the xquerydoc testsuite for the Saxon processor.
+# It auto-detects Saxon (via Maven) and falls back to system Calabash.
 #
-# MarkLogic unit tests are located under src/tests/unit/saxon
+# Saxon mode (CI): run-test.xq is invoked directly with net.sf.saxon.Query
+# Calabash mode:   saxon-test.xpl XProc pipeline is used
 #
-# to add new tests review existing tests there and add an entry here to run them.
-#
-# the following describes the input/output and options passed in through XProc
-#
-# -isource: XProc input takes in MarkLogic configuration file (src/tests/config.xml)
-# -oresult: XProc output writes result of tests to src/tests/results/marklogic
-#
-#     test: option contains the unit test path (unit tests are written in xquery)
-#  example: option contains the path to the example xquery document to apply unit test too
-# expected: option contains the path to the expected result for the test
-#
+# to add new tests, add an entry to the test list and a run_test call below.
 
-cd src/tests
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+XQUERYDOC_DIR="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/Saxon/default.xml saxon-test.xpl example=/src/tests/examples/?select=default.xqy expected=/src/tests/expected/saxon/default.xml
+cd "${XQUERYDOC_DIR}/src/tests"
+mkdir -p result/Saxon
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/Saxon/get-code.xml saxon-test.xpl example=/src/tests/examples/?select=get-code.xqy expected=/src/tests/expected/saxon/get-code.xml
+# Auto-detect: prefer Saxon from Maven; fall back to system Calabash
+SAXON_JAR=$(ls "${XQUERYDOC_DIR}/target/dependency/Saxon-HE-"*.jar 2>/dev/null | head -1)
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/Saxon/sample.xml saxon-test.xpl example=/src/tests/examples/?select=sample.xqy expected=/src/tests/expected/saxon/sample.xml
+if [ -n "$SAXON_JAR" ]; then
+  run_test() {   # $1=example  $2=expected  $3=outfile
+    java -Xss16m -cp "${XQUERYDOC_DIR}/target/dependency/*" \
+      net.sf.saxon.Query \
+      -q:"${XQUERYDOC_DIR}/src/tests/run-test.xq" \
+      "distpath=${XQUERYDOC_DIR}" \
+      "expected=$2" "example=$1" \
+      > "$3"
+  }
+else
+  # Local dev: system Calabash
+  TMPCONFIG=$(mktemp /tmp/xquerydoc-config.XXXXXX.xml)
+  sed "s|<path>.*</path>|<path>${XQUERYDOC_DIR}</path>|" \
+    "${XQUERYDOC_DIR}/src/tests/config.xml" > "$TMPCONFIG"
+  trap 'rm -f "$TMPCONFIG"' EXIT
 
-/usr/local/bin/calabash -isource=config.xml -oresult=result/saxon-report.html report.xpl processor=Saxon
+  CALABASH_JAR=$(grep -oE '"[^"]*\.jar"' "$(command -v calabash)" | tr -d '"')
+  JAVA_HOME_CAL="${JAVA_HOME:-/usr/local/opt/openjdk/libexec/openjdk.jdk/Contents/Home}"
+  run_test() {   # $1=example  $2=expected  $3=outfile
+    "${JAVA_HOME_CAL}/bin/java" -Xss16m -Xmx1024m -jar "$CALABASH_JAR" \
+      -isource="$TMPCONFIG" -oresult="$3" \
+      "${XQUERYDOC_DIR}/src/tests/saxon-test.xpl" \
+      "example=$1" "expected=$2"
+  }
+fi
 
+run_test /src/tests/examples/?select=default.xqy  /src/tests/expected/saxon/default.xml  result/Saxon/default.xml
+run_test /src/tests/examples/?select=get-code.xqy /src/tests/expected/saxon/get-code.xml result/Saxon/get-code.xml
+run_test /src/tests/examples/?select=sample.xqy   /src/tests/expected/saxon/sample.xml   result/Saxon/sample.xml
+run_test /src/tests/examples/?select=xquery31.xqy /src/tests/expected/saxon/xquery31.xml result/Saxon/xquery31.xml
+
+# Print a pass/fail summary by comparing <expected> vs <actual> in each result file.
+python3 - "${XQUERYDOC_DIR}/src/tests/result/Saxon" <<'PYEOF'
+import sys, os, io
+import xml.etree.ElementTree as ET
+
+result_dir = sys.argv[1]
+tests = [
+    ("default",  "default.xml"),
+    ("get-code",  "get-code.xml"),
+    ("sample",    "sample.xml"),
+    ("xquery31",  "xquery31.xml"),
+]
+
+def canon(el):
+    out = io.StringIO()
+    ET.canonicalize(ET.tostring(el), out=out, strip_text=True)
+    return out.getvalue()
+
+failures = 0
+print()
+print("Saxon test results:")
+for name, fname in tests:
+    path = os.path.join(result_dir, fname)
+    try:
+        root = ET.parse(path).getroot()
+        for test in root.findall("test"):
+            exp = list(test.find("expected"))
+            act = list(test.find("actual"))
+            if exp and act and canon(exp[0]) == canon(act[0]):
+                print(f"  PASS  {name}")
+            else:
+                print(f"  FAIL  {name}")
+                failures += 1
+    except Exception as e:
+        print(f"  ERROR {name}: {e}")
+        failures += 1
+
+print()
+if failures == 0:
+    print("All tests passed.")
+else:
+    print(f"{failures} test(s) FAILED.")
+sys.exit(failures)
+PYEOF

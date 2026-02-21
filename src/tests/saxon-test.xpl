@@ -50,8 +50,8 @@
 
           let $expectedpath  := fn:concat('file://',$distpath,$expected)
           let $expect        := fn:doc($expectedpath)
-          let $xquerypath    := fn:concat('file://',$distpath,$example,';unparsed=yes')
-          let $xquery        := fn:collection($xquerypath)
+          let $xquerypath    := fn:concat('file://',$distpath,fn:replace($example,'\?select=',''))
+          let $xquery        := fn:unparsed-text($xquerypath)
           let $actual        := xqdoc:parse($xquery,'test')
 
           return
