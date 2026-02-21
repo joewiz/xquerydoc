@@ -26,6 +26,13 @@ XQUERYDOC_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 CURRENTDIR=`pwd`
 
+CALABASH="${CALABASH_HOME:+${CALABASH_HOME}/calabash}"
+CALABASH="${CALABASH:-$(command -v calabash 2>/dev/null)}"
+if [ -z "$CALABASH" ]; then
+  echo "Error: calabash not found. Install XMLCalabash or set CALABASH_HOME." >&2
+  exit 1
+fi
+
 #Edit these default values
 #####################################################################
 XQUERY=$CURRENTDIR
@@ -68,7 +75,7 @@ echo ""
 echo "generating documentation ..."
 
 # run xproc pipeline
-$XQUERYDOC_DIR/deps/xmlcalabash/calabash -oresult=$OUTPUT/index.html $XQUERYDOC_DIR/xquerydoc.xpl xquery=$XQUERY output=$OUTPUT currentdir=$CURRENTDIR format=$FORMAT 
+$CALABASH -oresult=$OUTPUT/index.html $XQUERYDOC_DIR/xquerydoc.xpl xquery=$XQUERY output=$OUTPUT currentdir=$CURRENTDIR format=$FORMAT
 
 # copy lib resources
 mkdir -p $OUTPUT/lib

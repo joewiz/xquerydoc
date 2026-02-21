@@ -18,12 +18,11 @@
     xmlns:xqd="http://github.com/xquery/xquerydoc"
     xmlns:c="http://www.w3.org/ns/xproc-step"
     xmlns:p="http://www.w3.org/ns/xproc"
-    xmlns:ml="http://xmlcalabash.com/ns/extensions/marklogic" 
     xmlns:cx="http://xmlcalabash.com/ns/extensions"
     name="xquerydoc"
     type="xqd:xquerydoc"
     version="1.0"
-    exclude-inline-prefixes="c ml p">
+    exclude-inline-prefixes="c p">
 
   <p:documentation>generates documentation of a single xquery module</p:documentation>
 
@@ -48,7 +47,7 @@
   <p:option name="format" required="true"/>  
   
   <!-- import Calabash library //-->
-  <p:import href="deps/xmlcalabash/library-1.0.xpl"/>
+  <p:import href="src/lib/library-1.0.xpl"/>
  <p:variable name="dirpath" select="if(starts-with($xquery,'/')) then
                                      $xquery else concat($currentdir,'/',$xquery)
                                     
@@ -64,7 +63,7 @@
   <!-- APB @TODO fix for unix -->
   <p:variable name="outputdirpath" select="concat('file://',$outdir1)"/>
   <!-- import recursive directory list step //-->
-  <p:import href="deps/xmlcalabash/recursive-directory-list.xpl"/>
+  <p:import href="src/lib/recursive-directory-list.xpl"/>
   <p:in-scope-names name="vars"/>
  
   <cx:recursive-directory-list name="dirlist" exclude-filter=".svn">

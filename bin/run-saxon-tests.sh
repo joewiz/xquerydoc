@@ -1,53 +1,53 @@
 #!/bin/bash
 
-# This script runs the xquerydoc testsuite for the Saxon  processor
-# using an XProc pipeline (src/tests/marklogic-test.xpl), which is a generic
-# testrunner.
+# This script runs the xquerydoc testsuite for the Saxon processor.
+# It auto-detects Saxon (via Maven) and falls back to system Calabash.
 #
-# MarkLogic unit tests are located under src/tests/unit/saxon
+# Saxon mode (CI): run-test.xq is invoked directly with net.sf.saxon.Query
+# Calabash mode:   saxon-test.xpl XProc pipeline is used
 #
-# to add new tests review existing tests there and add an entry here to run them.
-#
-# the following describes the input/output and options passed in through XProc
-#
-# -isource: XProc input takes in MarkLogic configuration file (src/tests/config.xml)
-# -oresult: XProc output writes result of tests to src/tests/results/marklogic
-#
-#     test: option contains the unit test path (unit tests are written in xquery)
-#  example: option contains the path to the example xquery document to apply unit test too
-# expected: option contains the path to the expected result for the test
-#
+# to add new tests, add an entry to the test list and a run_test call below.
 
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
 XQUERYDOC_DIR="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 
-# Generate a temporary config with the correct project root path
-TMPCONFIG=$(mktemp /tmp/xquerydoc-config.XXXXXX.xml)
-sed "s|<path>.*</path>|<path>${XQUERYDOC_DIR}</path>|" "${XQUERYDOC_DIR}/src/tests/config.xml" > "$TMPCONFIG"
-
-# Extract the Calabash jar from the Homebrew wrapper and call java directly with
-# a larger thread stack (-Xss16m) to handle the deeper recursion in XQuery31.xq.
-CALABASH_JAR=$(grep -oE '"[^"]*\.jar"' /usr/local/bin/calabash | tr -d '"')
-JAVA_HOME_CALABASH="${JAVA_HOME:-/usr/local/opt/openjdk/libexec/openjdk.jdk/Contents/Home}"
-run_calabash() {
-  "${JAVA_HOME_CALABASH}/bin/java" -Xss16m -Xmx1024m -jar "$CALABASH_JAR" "$@"
-}
-
 cd "${XQUERYDOC_DIR}/src/tests"
 mkdir -p result/Saxon
 
-run_calabash -isource="$TMPCONFIG" -oresult=result/Saxon/default.xml saxon-test.xpl example=/src/tests/examples/?select=default.xqy expected=/src/tests/expected/saxon/default.xml
+# Auto-detect: prefer Saxon from Maven; fall back to system Calabash
+SAXON_JAR=$(ls "${XQUERYDOC_DIR}/target/dependency/Saxon-HE-"*.jar 2>/dev/null | head -1)
 
-run_calabash -isource="$TMPCONFIG" -oresult=result/Saxon/get-code.xml saxon-test.xpl example=/src/tests/examples/?select=get-code.xqy expected=/src/tests/expected/saxon/get-code.xml
+if [ -n "$SAXON_JAR" ]; then
+  run_test() {   # $1=example  $2=expected  $3=outfile
+    java -Xss16m -cp "${XQUERYDOC_DIR}/target/dependency/*" \
+      net.sf.saxon.Query \
+      -q:"${XQUERYDOC_DIR}/src/tests/run-test.xq" \
+      "distpath=${XQUERYDOC_DIR}" \
+      "expected=$2" "example=$1" \
+      > "$3"
+  }
+else
+  # Local dev: system Calabash
+  TMPCONFIG=$(mktemp /tmp/xquerydoc-config.XXXXXX.xml)
+  sed "s|<path>.*</path>|<path>${XQUERYDOC_DIR}</path>|" \
+    "${XQUERYDOC_DIR}/src/tests/config.xml" > "$TMPCONFIG"
+  trap 'rm -f "$TMPCONFIG"' EXIT
 
-run_calabash -isource="$TMPCONFIG" -oresult=result/Saxon/sample.xml saxon-test.xpl example=/src/tests/examples/?select=sample.xqy expected=/src/tests/expected/saxon/sample.xml
+  CALABASH_JAR=$(grep -oE '"[^"]*\.jar"' "$(command -v calabash)" | tr -d '"')
+  JAVA_HOME_CAL="${JAVA_HOME:-/usr/local/opt/openjdk/libexec/openjdk.jdk/Contents/Home}"
+  run_test() {   # $1=example  $2=expected  $3=outfile
+    "${JAVA_HOME_CAL}/bin/java" -Xss16m -Xmx1024m -jar "$CALABASH_JAR" \
+      -isource="$TMPCONFIG" -oresult="$3" \
+      "${XQUERYDOC_DIR}/src/tests/saxon-test.xpl" \
+      "example=$1" "expected=$2"
+  }
+fi
 
-run_calabash -isource="$TMPCONFIG" -oresult=result/Saxon/xquery31.xml saxon-test.xpl example=/src/tests/examples/?select=xquery31.xqy expected=/src/tests/expected/saxon/xquery31.xml
-
-run_calabash -isource="$TMPCONFIG" -oresult=result/saxon-report.html report.xpl processor=Saxon
-
-rm -f "$TMPCONFIG"
+run_test /src/tests/examples/?select=default.xqy  /src/tests/expected/saxon/default.xml  result/Saxon/default.xml
+run_test /src/tests/examples/?select=get-code.xqy /src/tests/expected/saxon/get-code.xml result/Saxon/get-code.xml
+run_test /src/tests/examples/?select=sample.xqy   /src/tests/expected/saxon/sample.xml   result/Saxon/sample.xml
+run_test /src/tests/examples/?select=xquery31.xqy /src/tests/expected/saxon/xquery31.xml result/Saxon/xquery31.xml
 
 # Print a pass/fail summary by comparing <expected> vs <actual> in each result file.
 python3 - "${XQUERYDOC_DIR}/src/tests/result/Saxon" <<'PYEOF'
